@@ -1,6 +1,7 @@
-address:ya.ru
+address:192.168.1.1
 address:google.com
-address:fe.ru
+address:apple.com
+address:yahoo.com
 numOfValues:20
 pingTimeout:2
 pingFrequency:2

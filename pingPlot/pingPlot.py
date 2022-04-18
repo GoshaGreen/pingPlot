@@ -48,8 +48,7 @@ class PingPlot:
     def requestorFunc(self):
         try:
             if len(self.addresses) == 0: return
-            # print('before threading', time.time())
-            threadsGroupNum = int((self.pingTimeout / self.pingFrequency) * 3) # X3 because trust nbody
+            threadsGroupNum = int((self.pingTimeout / self.pingFrequency) * 3) # X3 because tRust nbody
             threadsNum = int(self.addressesSize * threadsGroupNum)
             futures = [None] * threadsNum
             threadGroupIndex = 0
@@ -59,9 +58,7 @@ class PingPlot:
                     while abs(startTime-time.time()) < (1/self.pingFrequency):
                         time.sleep(0.05)
                     startTime += (1/self.pingFrequency)
-                    # print('-'*80+'{:16} {:15}, {:5}'.format('\nlets finish', time.time(), self.currentValueIndex.value))
                     self.currentValueIndex.value = int(startTime * self.pingFrequency) % self.numOfValues
-                    # print('='*80+'{:16} {:15}, {:5}'.format('\nlets start', time.time(), self.currentValueIndex.value))
                     threadGroupIndex = (threadGroupIndex + 1) % threadsGroupNum
                     # set data to zero before run
                     for addressIndex in range(self.addressesSize):
@@ -72,11 +69,9 @@ class PingPlot:
                         future = executor.submit(self.ping, addressIndex)
                         future.add_done_callback(addData)
                         futures[threadGroupIndex + addressIndex] = future
-                    # print('{:16} {:15}, {:5}'.format('after submit', time.time(), self.currentValueIndex.value))
                     for addressIndex in range(self.addressesSize):
                         if len(futures) < addressIndex or futures[addressIndex] == None: continue
                         executor.submit(self.catchException, futures[threadGroupIndex + addressIndex])
-                    # print('{:16} {:15}, {:5}'.format('after exception', time.time(), self.currentValueIndex.value))
         except Exception as e:
             print(e)
 
@@ -132,7 +127,6 @@ class PingPlot:
     def addPingDataCallback(self, future: Future, addressIndex: int, dataIndex: int):
         value = future.result(timeout=self.pingTimeout)
         self.setDataValue(value, addressIndex, dataIndex)
-        # print('{:16} {:15}, {:5}'.format('after callback', time.time(), self.currentValueIndex.value))
 
     def getDataArray(self, startEntry=None, numEntries=None) -> list:
         if startEntry == None: startEntry = self.currentValueIndex.value
@@ -195,7 +189,6 @@ def main():
 
     ## run requestor
     pp = PingPlot()
-
     pp.startRequestor()
 
     ## do cli
@@ -214,6 +207,7 @@ def main():
     #         if TO_PRINT : print()
     #     time.sleep(0.2)
 
+    ## GUI
     import matplotlib.pyplot as plt
     from matplotlib.animation import FuncAnimation
     from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
@@ -222,7 +216,17 @@ def main():
 
     window = tkinter.Tk()
     window.title('PingPlot')
-    window.geometry("500x500")
+    ws = window.winfo_screenwidth()
+    wh = window.winfo_screenheight()
+    width = 300
+    height = 200
+    window.geometry('{}x{}+{}+{}'.format(width, height, ws-width, wh-height-100))
+    window.attributes('-topmost', True)
+    def clouser():
+        plt.close('all')
+        pp.stopRequestor()
+        window.destroy()
+    window.protocol("WM_DELETE_WINDOW", clouser)
 
     MAX_PING_VALUE_PLOT = 1000
     # def plot():
@@ -234,7 +238,7 @@ def main():
     def update(frame):
         data = pp.getDataArray(startEntry = pp.currentValueIndex.value-1, numEntries=pp.numOfValues-1)
         maxPingValue = 0
-        ax.legend(['{:>4}ms : {:<16}'.format(data[i][0], x) for i,x in enumerate(pp.addresses)])
+        ax.legend(['{:<16}:{:>4}ms '.format(x, data[i][0]) for i,x in enumerate(pp.addresses)],prop={'size': 6, 'family': 'monospace'})
         for ind, (ln,) in enumerate(plots):
             # assert size of lines, and data dim
             xdata = npy.array(range(len(data[ind])))
