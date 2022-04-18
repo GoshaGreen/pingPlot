@@ -1,12 +1,9 @@
-from asyncio import as_completed
-from audioop import add
 import platform
 import subprocess
 import re
 from multiprocessing import Process, Value, Array
-from concurrent.futures import ThreadPoolExecutor, as_completed, Future
+from concurrent.futures import ThreadPoolExecutor, Future
 import time
-import os
 from functools import partial
 
 if platform.system()=='Windows':
@@ -189,36 +186,32 @@ def main():
 
     import matplotlib.pyplot as plt
     from matplotlib.animation import FuncAnimation
+    from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
     import numpy as npy
+    import tkinter
 
+    window = tkinter.Tk()
+    window.title('PingPlot')
+    window.geometry("500x500")
+
+    # def plot():
     fig, ax = plt.subplots()
-    xdata, ydata = [0, 1, 2], [ [0], [0], [0] ]
-    ln, = plt.plot(xdata, ydata)
-    ln.set_xdata(xdata)
-    ln.set_ydata(ydata)
-    # exit()
-
-    def init():
-        ax.set_xlim(0, pp.numOfValues)
-        ax.set_ylim(-1, 150)
-        return ln,
-
+    xdata, ydata = [], []
+    ax.set(xlim=(0, pp.numOfValues), ylim=(0,1000))
+    plots = [ax.plot(xdata, ydata) for x in pp.addresses]
     def update(frame):
         data = pp.getDataArray(numEntries=pp.numOfValues)
-        xdata = npy.array(range(len(data[0])))
-        ydata = (data[0], data[1]) #data[0] # 
-        ax.set_ylim(-1, max(data[0]))
+        for ind, (ln,) in enumerate(plots):
+            # assert size of lines, and data dim
+            xdata = npy.array(range(pp.numOfValues))
+            ydata = npy.array(data[ind])
+            ln.set_data(xdata, ydata)
+    ani = FuncAnimation(fig, update, frames=range(0, pp.numOfValues), blit=False, repeat=True)
+    canvas = FigureCanvasTkAgg(fig, master = window)
+    canvas.draw()
+    canvas.get_tk_widget().pack()
 
-        datanpy = npy.array(data).transpose()
-        print(xdata.shape, datanpy.shape)
-        ln.set_xdata(xdata)
-        ln.set_ydata(datanpy)
-        # ln.set_data(xdata, data[0])
-        return ln,
-
-    ani = FuncAnimation(fig, update, frames=range(0, pp.numOfValues),
-                        init_func=init, blit=False, repeat=True)
-    plt.show()
+    window.mainloop()
 
     pp.stopRequestor()
 
