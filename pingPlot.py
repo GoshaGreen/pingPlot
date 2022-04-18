@@ -4,6 +4,7 @@ import re
 from multiprocessing import Process, Value, Array
 from concurrent.futures import ThreadPoolExecutor, Future
 import time
+import os
 from functools import partial
 
 if platform.system()=='Windows':
@@ -11,14 +12,15 @@ if platform.system()=='Windows':
 else:
     print('TODO: implement  RegEx for ping utility for OS: {}'.format(platform.system()))
     exit()
-DEBUG = True
+DEBUG = False
 
 class PingPlot:
-    def __init__(self):
-        self.numOfValues = 15
+    def __init__(self, settingsFile='settings.txt'):
+        self.numOfValues = 60
         self.pingTimeout = 5 # sec
         self.pingFrequency = 2 # times per second
-        self.addresses = []
+        self.addresses = list()
+        self.loadSettings(settingsFile)
         self.currentValueIndex = Value('i', 0)
         self.requestorProcess = None
         self.initData()
@@ -124,6 +126,7 @@ class PingPlot:
                 pingVal = int(PingPlot.filterNonDigits(srow[-3]))
         except Exception as e:
             if DEBUG : print(e)
+            pingVal =5000
         return pingVal
 
     def addPingDataCallback(self, future: Future, addressIndex: int, dataIndex: int):
@@ -158,14 +161,41 @@ class PingPlot:
         self.currentValueIndex.value += 1
         self.currentValueIndex.value %= self.numOfValues
 
+    def loadSettings(self, fileName):
+        self.addresses = list()
+        if os.path.isfile(fileName):
+            with open(fileName, 'r') as f:
+                for row in f.readlines():
+                    if row.startswith('address:'):
+                        address = str(row.split(':')[1].replace(' ', '').replace('\n',''))
+                        self.addresses.append(address)
+                    elif row.startswith('numOfValues:'):
+                        numOfValues = int(row.split(':')[1].replace(' ', '').replace('\n',''))
+                        self.numOfValues = numOfValues
+                    elif row.startswith('pingTimeout:'):
+                        pingTimeout = int(row.split(':')[1].replace(' ', '').replace('\n',''))
+                        self.pingTimeout = pingTimeout
+                    elif row.startswith('pingFrequency:'):
+                        pingFrequency = int(row.split(':')[1].replace(' ', '').replace('\n',''))
+                        self.pingFrequency = pingFrequency
+                    else:
+                        print('Settings not recognized: \"{}\"'.format(row))
+        else:
+            print('Settings cannot be loaded: file not found: \"{}\"'.format(fileName))
+
+    def storeSetings(self):
+        with open('settings.txt', 'w') as f:
+            for address in self.addresses:
+                f.write('address:{}\n'.format(address))
+            f.write('numOfValues:{}\n'.format(self.numOfValues))
+            f.write('pingTimeout:{}\n'.format(self.pingTimeout))
+            f.write('pingFrequency:{}\n'.format(self.pingFrequency))
 
 def main():
 
     ## run requestor
     pp = PingPlot()
-    pp.appendAddress('ya.ru')
-    pp.appendAddress('google.com')
-    pp.appendAddress('fe')
+
     pp.startRequestor()
 
     ## do cli
@@ -194,18 +224,24 @@ def main():
     window.title('PingPlot')
     window.geometry("500x500")
 
+    MAX_PING_VALUE_PLOT = 1000
     # def plot():
     fig, ax = plt.subplots()
     xdata, ydata = [], []
-    ax.set(xlim=(0, pp.numOfValues), ylim=(0,1000))
+    ax.set(xlim=(0, pp.numOfValues), ylim=(0,MAX_PING_VALUE_PLOT))
     plots = [ax.plot(xdata, ydata) for x in pp.addresses]
+    ax.legend(pp.addresses)
     def update(frame):
-        data = pp.getDataArray(numEntries=pp.numOfValues)
+        data = pp.getDataArray(startEntry = pp.currentValueIndex.value-1, numEntries=pp.numOfValues-1)
+        maxPingValue = 0
+        ax.legend(['{:>4}ms : {:<16}'.format(data[i][0], x) for i,x in enumerate(pp.addresses)])
         for ind, (ln,) in enumerate(plots):
             # assert size of lines, and data dim
-            xdata = npy.array(range(pp.numOfValues))
+            xdata = npy.array(range(len(data[ind])))
             ydata = npy.array(data[ind])
+            maxPingValue = min(max([maxPingValue] + ydata), MAX_PING_VALUE_PLOT)
             ln.set_data(xdata, ydata)
+        ax.set(ylim=(-1,maxPingValue))
     ani = FuncAnimation(fig, update, frames=range(0, pp.numOfValues), blit=False, repeat=True)
     canvas = FigureCanvasTkAgg(fig, master = window)
     canvas.draw()

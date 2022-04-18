@@ -1,0 +1,6 @@
+address:ya.ru
+address:google.com
+address:fe.ru
+numOfValues:20
+pingTimeout:2
+pingFrequency:2
